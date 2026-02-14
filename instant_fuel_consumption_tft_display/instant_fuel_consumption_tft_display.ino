@@ -11,54 +11,89 @@
 #define TFT_RST    23
 #define TFT_BL     4  // Backlight
 
-Adafruit_ST7789 tft = Adafruit_ST7789(TFT_CS, TFT_DC, TFT_RST);
+Adafruit_ST7789 tft = Adafruit_ST7789(TFT_CS, TFT_DC, TFT_MOSI, TFT_SCLK, TFT_RST);
 
-const uint32_t bg_color = ST77XX_BLACK;
+/* Display size */
+#define DISPLAY_WIDTH  135
+#define DISPLAY_HEIGHT 240
 
-// Configuración de la barra
-const int barX = 20;
-const int barY = 60;
-const int barWidth = 200;
-const int barHeight = 30;
-const int maxValue = 15;
+
+/* Colors */
+#define BG_COLOR        ST77XX_BLACK
+#define PRIMARY_COLOR   ST77XX_WHITE
+#define SECONDARY_COLOR ST77XX_WHITE
+#define TEXT_COLOR      ST77XX_WHITE
 
 int currentValue = -1;
 
-void drawBar(int value) {
-  // Limitar rango
-  value = constrain(value, 0, maxValue);
+class DynamicBar {
+  public:
+    uint16_t x0, y0, x1, y1;
 
-  // Limpiar área de la barra
-  tft.fillRect(barX, barY, barWidth, barHeight, bg_color);
-  tft.drawRect(barX, barY, barWidth, barHeight, ST77XX_WHITE);
+    uint16_t barMaxValue = 15;
+    const uint16_t barMaxWidth = x1 - x0;
 
-  // Calcular ancho proporcional
-  int fillWidth = map(value, 0, maxValue, 0, barWidth);
+    const uint8_t txtSize = 2;
+    const uint8_t txtHeight = 6; // px
+    const uint8_t v_sep = 5; // px
 
-  // Dibujar relleno
-  tft.fillRect(barX, barY, fillWidth, barHeight, ST77XX_GREEN);
+    const uint16_t txtOffset = txtSize * txtHeight;
+    const uint16_t txtEnd_y = y0 + txtOffset;
 
-  // Mostrar valor numérico
-  tft.setTextColor(ST77XX_WHITE, bg_color);
-  tft.setCursor(barX, barY - 25);
-  tft.setTextSize(2);
-  tft.print("L/h: ");
-  tft.print(value);
-}
+    DynamicBar(uint16_t _x0, uint16_t _y0, uint16_t _x1, uint16_t _y1)
+        : x0(_x0), y0(_y0), x1(_x1), y1(_y1) {
+    }
+    
+    void drawFrame() {
+      tft.setTextColor(TEXT_COLOR, BG_COLOR);
+      tft.setCursor(x0, y0);
+      tft.setTextSize(txtSize);
+      tft.print("L/h:");
+
+      uint16_t barLimit_x0 = x1,
+               barLimit_y0 = txtEnd_y + v_sep,
+               barLimit_x1 = x1,
+               barLimit_y1 = y1;
+      tft.drawLine(
+        barLimit_x0, barLimit_y0,
+        barLimit_x1, barLimit_y1,
+        SECONDARY_COLOR
+      );
+    }
+
+    void drawBar(uint16_t value) {
+      value = constrain(value, 0, barMaxValue);
+      uint16_t fillWidth = map(value, 0, barMaxValue, 0, barMaxWidth);
+
+      // Limpiar área de la barra
+
+      // Dibujar relleno
+      uint16_t bar_x0 = x0,
+               bar_y0 = txtEnd_y + v_sep,
+               bar_w = fillWidth,
+               bar_h = y1 - bar_y0 + 1;
+      tft.fillRect(
+        bar_x0, bar_y0,
+        bar_w, bar_h,
+        PRIMARY_COLOR
+      );
+    }
+};
+
+DynamicBar bar(20, 55, 200, 90);
 
 void setup() {
   Serial.begin(115200);
-
-  SPI.begin(TFT_SCLK, TFT_MISO, TFT_MOSI, TFT_CS);
+  tft.init(DISPLAY_WIDTH, DISPLAY_HEIGHT);
 
   pinMode(TFT_BL, OUTPUT);
+
   analogWrite(TFT_BL, 255);  // Brillo máximo
 
-  tft.init(135, 240);
-  tft.setRotation(1);  // Landscape 
-  tft.fillScreen(bg_color);
+  tft.setRotation(3); // Landscape
+  tft.fillScreen(BG_COLOR);
 
-  drawBar(0);
+  bar.drawFrame();
 }
 
 void loop() {
@@ -66,8 +101,8 @@ void loop() {
     int newValue = Serial.parseInt();
 
     if (newValue != currentValue) {
+      bar.drawBar(newValue);
       currentValue = newValue;
-      drawBar(currentValue);
     }
 
     // Limpia buffer
