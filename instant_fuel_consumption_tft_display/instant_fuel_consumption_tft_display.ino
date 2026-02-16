@@ -26,37 +26,51 @@ Adafruit_ST7789 tft = Adafruit_ST7789(TFT_CS, TFT_DC, TFT_MOSI, TFT_SCLK, TFT_RS
 
 int currentValue = -1;
 
+class Coords {
+  public:
+    uint16_t x0, y0, x1, y1, widht, height;
+};
+
 class DynamicBar {
   public:
-    uint16_t x0, y0, x1, y1;
+    Coords obj;
+    Coords barVar, cleaningBar, limitBar;
+    Coords txtFixed, txtVar;
 
     uint16_t barMaxValue = 15;
-    const uint16_t barMaxWidth = x1 - x0;
+    const uint16_t barMaxWidth = obj.x1 - obj.x0;
 
     const uint8_t txtSize = 2;
     const uint8_t txtHeight = 6; // px
-    const uint8_t v_sep = 5; // px
+    const uint16_t sep = 5; // px
 
     const uint16_t txtOffset = txtSize * txtHeight;
-    const uint16_t txtEnd_y = y0 + txtOffset;
+    const uint16_t txtEnd_y = obj.y0 + txtOffset;
 
-    DynamicBar(uint16_t _x0, uint16_t _y0, uint16_t _x1, uint16_t _y1)
-        : x0(_x0), y0(_y0), x1(_x1), y1(_y1) {
+    DynamicBar(uint16_t x0, uint16_t y0, uint16_t x1, uint16_t y1){
+      obj.x0 = x0;
+      obj.y0 = y0;
+      obj.x1 = x1;
+      obj.y1 = y1;
     }
     
     void drawFrame() {
+      txtFixed.x0 = obj.x0;
+      txtFixed.y0 = obj.y0;
+      // txtFixed.x0 = ?; // TDB
+      txtFixed.y1 = obj.y0 + txtHeight * txtSize;
       tft.setTextColor(TEXT_COLOR, BG_COLOR);
-      tft.setCursor(x0, y0);
+      tft.setCursor(txtFixed.x0, txtFixed.y0);
       tft.setTextSize(txtSize);
       tft.print("L/h:");
 
-      uint16_t barLimit_x0 = x1,
-               barLimit_y0 = txtEnd_y + v_sep,
-               barLimit_x1 = x1,
-               barLimit_y1 = y1;
+      limitBar.x0 = obj.x1,
+      limitBar.y0 = txtFixed.y1 + sep,
+      limitBar.x1 = obj.x1,
+      limitBar.y1 = obj.y1;
       tft.drawLine(
-        barLimit_x0, barLimit_y0,
-        barLimit_x1, barLimit_y1,
+        limitBar.x0, limitBar.y0,
+        limitBar.x1, limitBar.y1,
         SECONDARY_COLOR
       );
     }
@@ -68,10 +82,10 @@ class DynamicBar {
       // Limpiar área de la barra
 
       // Dibujar relleno
-      uint16_t bar_x0 = x0,
-               bar_y0 = txtEnd_y + v_sep,
+      uint16_t bar_x0 = obj.x0,
+               bar_y0 = txtEnd_y + sep,
                bar_w = fillWidth,
-               bar_h = y1 - bar_y0 + 1;
+               bar_h = obj.y1 - bar_y0 + 1;
       tft.fillRect(
         bar_x0, bar_y0,
         bar_w, bar_h,
