@@ -1,9 +1,10 @@
 #include <Adafruit_GFX.h>
 #include <Adafruit_ST7789.h>
 #include <SPI.h>
+#include <ELMo.h>
 #include "include/coords/coords.h"
 
-/* PINOUT */
+/* ST7789V PINOUT */
 #define TFT_MISO   -1 // Not used
 #define TFT_MOSI   19
 #define TFT_SCLK   18
@@ -12,19 +13,16 @@
 #define TFT_RST    23
 #define TFT_BL     4  // Backlight
 
-/* Display Orientation */
-#define PORTRAIT          0
-#define LANDSCAPE         1
-#define PORTRAIT_FLIPPED  2
-#define LANDSCAPE_FLIPPED 3
-#define DISPLAY_ORIENTATION LANDSCAPE
-
-Adafruit_ST7789 tft = Adafruit_ST7789(TFT_CS, TFT_DC, TFT_MOSI, TFT_SCLK, TFT_RST);
-
 /* Display size */
 #define DISPLAY_WIDTH  135
 #define DISPLAY_HEIGHT 240
 
+/* Display Orientation */
+#define PORTRAIT            0
+#define LANDSCAPE           1
+#define PORTRAIT_FLIPPED    2
+#define LANDSCAPE_FLIPPED   3
+#define DISPLAY_ORIENTATION LANDSCAPE
 
 /* Colors */
 #define BG_COLOR        ST77XX_BLACK
@@ -32,19 +30,28 @@ Adafruit_ST7789 tft = Adafruit_ST7789(TFT_CS, TFT_DC, TFT_MOSI, TFT_SCLK, TFT_RS
 #define SECONDARY_COLOR ST77XX_WHITE
 #define TEXT_COLOR      ST77XX_WHITE
 
-int currentValue = -1;
+/* Containers position */
+#define FUEL_COMNSUMPTION_X 40
+#define FUEL_COMNSUMPTION_Y 70
+
+Adafruit_ST7789 tft = Adafruit_ST7789(TFT_CS, TFT_DC, TFT_MOSI, TFT_SCLK, TFT_RST);
 
 class DynamicBar {
+  private:
+    const uint8_t txtSize = 2;
+    const uint8_t txtHeight = 6; // px
+    const uint16_t sep = 5; // px
+
   public:
     SmartCoords container;
     SmartCoords barVar, cleaningBar, limitBar;
     SmartCoords txtFixed, txtVar;
 
+    /* Maximun bar value */
     uint16_t barMaxValue = 15;
 
-    const uint8_t txtSize = 2;
-    const uint8_t txtHeight = 6; // px
-    const uint16_t sep = 5; // px
+    /* Positions */
+    // uint16_t limitBar_x0 = 180
 
     void init(uint16_t x, uint16_t y) {
       txtFixed.init(x,y);
@@ -80,18 +87,20 @@ class DynamicBar {
     }
 
     void drawBar(int16_t value) {
-      static int16_t prev_value = 0;
+      value = constrain(value, 0, barMaxValue); // Limit `value` up to `barMaxValue`
+      static int16_t prev_width = 0;
 
-      value = constrain(value, 0, barMaxValue);
-      uint16_t fillWidth = map(value, 0, barMaxValue, 0, 180);
+      uint16_t width = map(value, 0, barMaxValue, 0, limitBar.rel.x1);
 
       // Calculate the area to clean/draw, it cleans just the remianing bar
+      uint16_t barVar_rel_x1_temp = barVar.rel.x1;
       cleaningBar.set_x1(barVar.rel.x1);
-      barVar.set_width(fillWidth);
+      barVar.set_width(width);
       cleaningBar.set_x0(barVar.rel.x1);
+      barVar.set_x0(barVar_rel_x1_temp);
 
       // Draw or clean the bar depending
-      if(value > prev_value){
+      if(width > prev_width){
         tft.fillRect(
           barVar.abs.x0, barVar.abs.y0,
           barVar.rel.w,  barVar.rel.h,
@@ -104,10 +113,9 @@ class DynamicBar {
           BG_COLOR
         );
       }
-      //Serial.printf("barVar -      x0: %d, y0: %d | x1: %d, y1: %d\n", barVar.rel.x0, barVar.rel.y0, barVar.rel.x1, barVar.rel.y1);
-      //Serial.printf("cleaningBar - x0: %d, y0: %d | x1: %d, y1: %d\n", cleaningBar.rel.x0, cleaningBar.rel.y0, cleaningBar.rel.x1, cleaningBar.rel.y1);
-      
-      prev_value = value;
+
+      prev_width = width;
+      barVar.set_x0(0);
     }
 };
 
@@ -122,12 +130,13 @@ void setup() {
 
   tft.setRotation(DISPLAY_ORIENTATION); // Landscape
   tft.fillScreen(BG_COLOR);
-  
-  fuel_consuption.init(50,60);
+
+  fuel_consuption.init(FUEL_COMNSUMPTION_X ,FUEL_COMNSUMPTION_Y);
   fuel_consuption.drawFrame();
 }
 
 void loop() {
+  static uint16_t currentValue = -1;
   if (Serial.available()) {
     int newValue = Serial.parseInt();
     Serial.println("ACK");
