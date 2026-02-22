@@ -31,15 +31,22 @@
 #define TEXT_COLOR      ST77XX_WHITE
 
 /* Containers position */
-#define FUEL_COMNSUMPTION_X 40
-#define FUEL_COMNSUMPTION_Y 70
+#define FUEL_COMNSUMPTION_X0 30
+#define FUEL_COMNSUMPTION_Y0 30
+#define FUEL_COMNSUMPTION_X1 180
+#define FUEL_COMNSUMPTION_Y1 30
+#define FUEL_COMNSUMPTION_MAX_BAR_VALUE 15.0
 
 Adafruit_ST7789 tft = Adafruit_ST7789(TFT_CS, TFT_DC, TFT_MOSI, TFT_SCLK, TFT_RST);
 
 class DynamicBar {
   private:
-    const uint8_t txtSize = 2;
-    const uint8_t txtHeight = 6; // px
+    /* Parameters default values */
+    float barMaxValue = 15.0; // units
+    uint16_t barLenght = 180; // px
+    uint16_t txtSize = 2;
+
+    const uint16_t txtHeight = 6; // px
     const uint16_t sep = 5; // px
 
   public:
@@ -47,30 +54,37 @@ class DynamicBar {
     SmartCoords barVar, cleaningBar, limitBar;
     SmartCoords txtFixed, txtVar;
 
-    /* Maximun bar value */
-    uint16_t barMaxValue = 15;
+    void init(uint16_t _x0, uint16_t _y0, uint16_t _x1, uint16_t _y1, uint16_t _barMaxValue) {
+      container.init(container.x0, container.y0);
+      container.set_x0y0(_x0, _y0);
+      container.set_x1y1(_x1, _y1);
 
-    /* Positions */
-    // uint16_t limitBar_x0 = 180
+      barMaxValue = _barMaxValue;
 
-    void init(uint16_t x, uint16_t y) {
-      txtFixed.init(x,y);
+      txtFixed.init(container.x0, container.y0);
       txtFixed.set_x0y0(0, 0);
 
-      limitBar.init(x,y);
-      limitBar.set_x0y0(180, 0);
-      limitBar.set_x1y1(180,38);
-      
-      barVar.init(x,y);
-      barVar.set_x0y0(0, 18);
-      barVar.set_x1y1(0, 38);
-      
-      cleaningBar.init(x,y);
-      cleaningBar.set_x0y0(180, 18);
-      cleaningBar.set_x1y1(180, 38);
+      uint16_t separation_for_bar = txtHeight * txtSize + sep;
 
-      txtVar.init(x,y);
+      limitBar.init(container.x0, container.y0);
+      limitBar.set_x0y0(container.x1, separation_for_bar);
+      limitBar.set_x1y1(container.x1, container.y1);
+
+      barVar.init(container.x0,container.y0);
+      barVar.set_x0y0(0, separation_for_bar);
+      barVar.set_x1y1(0, container.y1);
+
+      cleaningBar.init(container.x0,container.y0);
+      cleaningBar.set_x0y0(container.x1, separation_for_bar);
+      cleaningBar.set_x1y1(container.x1, container.y1);
+
+      txtVar.init(container.x0,container.y0);
       txtVar.set_x0y0(0, 0);
+    }
+
+    void set_parameters(uint16_t _barMaxValue, uint16_t _barLenght) {
+      barMaxValue = _barMaxValue;
+      barLenght = _barLenght;
     }
 
     void drawFrame() {
@@ -86,30 +100,29 @@ class DynamicBar {
       );
     }
 
-    void drawBar(int16_t value) {
+    void drawBar(float value) {
       value = constrain(value, 0, barMaxValue); // Limit `value` up to `barMaxValue`
       static int16_t prev_width = 0;
-
-      uint16_t width = map(value, 0, barMaxValue, 0, limitBar.rel.x1);
+      uint16_t width = (uint16_t) limitBar.x1 / barMaxValue * value; // Convertion from input value to width
 
       // Calculate the area to clean/draw, it cleans just the remianing bar
-      uint16_t barVar_rel_x1_temp = barVar.rel.x1;
-      cleaningBar.set_x1(barVar.rel.x1);
+      uint16_t barVar_rel_x1_temp = barVar.x1;
+      cleaningBar.set_x1(barVar.x1);
       barVar.set_width(width);
-      cleaningBar.set_x0(barVar.rel.x1);
+      cleaningBar.set_x0(barVar.x1);
       barVar.set_x0(barVar_rel_x1_temp);
 
       // Draw or clean the bar depending
       if(width > prev_width){
         tft.fillRect(
           barVar.abs.x0, barVar.abs.y0,
-          barVar.rel.w,  barVar.rel.h,
+          barVar.w,  barVar.h,
           PRIMARY_COLOR
         );
       }else{
         tft.fillRect(
           cleaningBar.abs.x0, cleaningBar.abs.y0,
-          cleaningBar.rel.w,  cleaningBar.rel.h,
+          cleaningBar.w,  cleaningBar.h,
           BG_COLOR
         );
       }
@@ -131,15 +144,17 @@ void setup() {
   tft.setRotation(DISPLAY_ORIENTATION); // Landscape
   tft.fillScreen(BG_COLOR);
 
-  fuel_consuption.init(FUEL_COMNSUMPTION_X ,FUEL_COMNSUMPTION_Y);
+  fuel_consuption.init(FUEL_COMNSUMPTION_X0 ,FUEL_COMNSUMPTION_Y0, 
+                       FUEL_COMNSUMPTION_X1 ,FUEL_COMNSUMPTION_Y1, 
+                       FUEL_COMNSUMPTION_MAX_BAR_VALUE);
   fuel_consuption.drawFrame();
 }
 
 void loop() {
-  static uint16_t currentValue = -1;
+  static float currentValue = -1.0;
   if (Serial.available()) {
-    int newValue = Serial.parseInt();
-    Serial.println("ACK");
+    float newValue = Serial.parseFloat();
+
     if (newValue != currentValue) {
       fuel_consuption.drawBar(newValue);
       currentValue = newValue;
