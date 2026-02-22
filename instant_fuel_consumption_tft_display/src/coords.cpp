@@ -94,5 +94,5 @@ void SmartCoords::set_width_n_height(int16_t width, int16_t height){
 }
 
 void SmartCoords::print(String msg){
-    Serial.printf("\n-%s-\nx0y0: %d, %d\nx1y1: %d, %d\nwh: %d, %d\n", msg.c_str(), x0,x0,y0,y1,w,h);
+    Serial.printf("\n-%s-\nx0y0: %d, %d\nx1y1: %d, %d\nwh: %d, %d\n", msg.c_str(), x0,y0,x1,y1,w,h);
 }

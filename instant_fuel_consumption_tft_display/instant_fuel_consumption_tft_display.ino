@@ -67,8 +67,8 @@ class DynamicBar {
       uint16_t separation_for_bar = txtHeight * txtSize + sep;
 
       limitBar.init(container.x0, container.y0);
-      limitBar.set_x0y0(container.x1, separation_for_bar);
-      limitBar.set_x1y1(container.x1, container.y1);
+      limitBar.set_x0y0(container.x1, 0);
+      limitBar.set_x1y1(container.x1, container.y1 - 1);
 
       barVar.init(container.x0,container.y0);
       barVar.set_x0y0(0, separation_for_bar);
