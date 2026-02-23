@@ -1,8 +1,10 @@
 #include <Adafruit_GFX.h>
 #include <Adafruit_ST7789.h>
-#include <SPI.h>
-#include <ELMo.h>
+#include "BluetoothSerial.h"
+#include "ELMduino.h"
 #include "include/coords/coords.h"
+
+//#define DEV_MODE
 
 /* ST7789V PINOUT */
 #define TFT_MISO   -1 // Not used
@@ -29,6 +31,8 @@
 #define PRIMARY_COLOR   ST77XX_WHITE
 #define SECONDARY_COLOR ST77XX_WHITE
 #define TEXT_COLOR      ST77XX_WHITE
+#define TEXT_COLOR_FAIL ST77XX_RED
+#define TEXT_COLOR_SUCC ST77XX_GREEN
 
 /* Containers position */
 #define FUEL_COMNSUMPTION_X0 30
@@ -38,6 +42,10 @@
 #define FUEL_COMNSUMPTION_MAX_BAR_VALUE 15.0
 
 Adafruit_ST7789 tft = Adafruit_ST7789(TFT_CS, TFT_DC, TFT_MOSI, TFT_SCLK, TFT_RST);
+
+BluetoothSerial ELM_PORT;
+ELM327 myELM327;
+uint8_t ELM_Mac[6] = {0x67, 0xD1, 0xFD, 0xC4, 0xD0, 0x42};
 
 class DynamicBar {
   private:
@@ -134,23 +142,72 @@ class DynamicBar {
 
 DynamicBar fuel_consuption;
 
-void setup() {
-  Serial.begin(115200);
-  tft.init(DISPLAY_WIDTH, DISPLAY_HEIGHT);
 
+void setup() {
   pinMode(TFT_BL, OUTPUT);
   analogWrite(TFT_BL, 255);  // Brillo máximo
 
-  tft.setRotation(DISPLAY_ORIENTATION); // Landscape
+  Serial.begin(115200);
+  ELM_PORT.begin("ArduHUD", true);
+
+  tft.init(DISPLAY_WIDTH, DISPLAY_HEIGHT);
+
+
+#ifndef DEV_MODE
+  tft.setRotation(LANDSCAPE_FLIPPED);
+  tft.fillScreen(BG_COLOR);
+
+  tft.setCursor(0, 0);
+  tft.setTextSize(1);
+  tft.setTextColor(TEXT_COLOR, BG_COLOR);
+  tft.println("Conecting to ELM327...");
+  Serial.println("\nConecting to ELM327...");
+  
+
+  if (!ELM_PORT.connect(ELM_Mac)){
+      tft.setTextColor(TEXT_COLOR_FAIL, BG_COLOR);
+      tft.println("Couldn't connect at Phase 1");
+      Serial.println("Couldn't connect at Phase 1");
+      while (1);
+  }
+  if (!myELM327.begin(ELM_PORT, true, 2000)){
+      Serial.println("Couldn't connect at Phase 2");
+      tft.setTextColor(TEXT_COLOR_FAIL, BG_COLOR);
+      tft.println("Couldn't connect at Phase 2");
+      while (1);
+  }
+
+  tft.setTextColor(TEXT_COLOR_SUCC, BG_COLOR);
+  tft.println("Conection SUCCESS");
+  delay(1000);
+#endif
+
+  tft.setRotation(DISPLAY_ORIENTATION);
   tft.fillScreen(BG_COLOR);
 
   fuel_consuption.init(FUEL_COMNSUMPTION_X0 ,FUEL_COMNSUMPTION_Y0, 
                        FUEL_COMNSUMPTION_X1 ,FUEL_COMNSUMPTION_Y1, 
                        FUEL_COMNSUMPTION_MAX_BAR_VALUE);
   fuel_consuption.drawFrame();
+  
 }
 
 void loop() {
+#ifndef DEV_MODE
+  float fuelRate_Value = myELM327.fuelRate();
+
+  if (myELM327.nb_rx_state == ELM_SUCCESS)
+  {
+      Serial.print("Fuel Rate: ");
+      Serial.println(fuelRate_Value);
+      fuel_consuption.drawBar(fuelRate_Value);
+      delay(1000);
+  }
+  else if (myELM327.nb_rx_state != ELM_GETTING_MSG)
+  {
+      myELM327.printError();
+  }
+#else
   static float currentValue = -1.0;
   if (Serial.available()) {
     float newValue = Serial.parseFloat();
@@ -163,4 +220,5 @@ void loop() {
     // Limpia buffer
     while (Serial.available()) Serial.read();
   }
+#endif
 }
